@@ -6,7 +6,7 @@
     "bond_float_names": ["bond_length"],
     "bond_angle_float_names": ["bond_angle"],
 
-    "embed_dim": 32,
+    "embed_dim": 512,
     "dropout_rate": 0.5,
     "layer_num": 8,
     "readout": "mean"

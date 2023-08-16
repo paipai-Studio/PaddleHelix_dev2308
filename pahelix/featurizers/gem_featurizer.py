@@ -17,7 +17,10 @@
 
 | Adapted from https://github.com/snap-stanford/pretrain-gnns/tree/master/chem/utils.py
 """
-
+import os
+import time
+import pickle
+import hashlib
 import numpy as np
 import networkx as nx
 from copy import deepcopy
@@ -167,12 +170,18 @@ def get_pretrain_bond_angle(edges, atom_poses):
     return [node_i_indices, node_j_indices, node_k_indices, bond_angles]
 
 
+caltime = lambda _t: f"{int(_t//3600):02d}:{int(_t//60%60):02d}:{int(_t%60):02d}.{int(_t%60*10%10)}s"
+
+
 class GeoPredTransformFn(object):
     """Gen features for downstream model"""
-    def __init__(self, pretrain_tasks, mask_ratio):
+    def __init__(self, pretrain_tasks, mask_ratio, lsmiles):
         self.pretrain_tasks = pretrain_tasks
         self.mask_ratio = mask_ratio
-
+        self.n = 0
+        self.t = time.perf_counter()
+        self.l = lsmiles
+    
     def prepare_pretrain_task(self, data):
         """
         prepare data for pretrain task
@@ -205,14 +214,39 @@ class GeoPredTransformFn(object):
         Returns:
             data: It contains reshape label and smiles.
         """
-        smiles = raw_data
-        print('smiles', smiles)
-        mol = AllChem.MolFromSmiles(smiles)
-        if mol is None:
-            return None
-        data = mol_to_geognn_graph_data_MMFF3d(mol)
-        data['smiles'] = smiles
-        data = self.prepare_pretrain_task(data)
+        self.n += 1
+
+        smiles, smilesMD5 = raw_data, hashlib.md5(raw_data.encode()).hexdigest()
+        Ksmiles1 = f"../../../../pkl/smiles/{smilesMD5}"
+        Ksmiles2 = f"../../../../pkl/mmff3d/{smilesMD5}"
+        Rsmiles = ""
+        
+        if not os.path.exists(Ksmiles2):
+            try:
+                mol = AllChem.MolFromSmiles(smiles)
+                if mol is None:
+                    return None
+                data = mol_to_geognn_graph_data_MMFF3d(mol)
+                data['smiles'] = smiles
+                data = self.prepare_pretrain_task(data)
+
+                with open(Ksmiles1, "wb") as f:
+                    pickle.dump(smiles, f)
+                with open(Ksmiles2, "wb") as f:
+                    pickle.dump(data, f)
+                Rsmiles = "❌"
+            except Exception as e:
+                print(f"ERROR {e}")
+                return None
+        else:
+            with open(Ksmiles2, "rb") as f:
+                data = pickle.load(f)
+            Rsmiles = "✅"
+        
+        print(
+            f"{Rsmiles} {self.n:06d} {self.n/self.l:.6%} {caltime(time.perf_counter()-self.t)} "
+            f"{Ksmiles2.split('/')[-1]}|{smiles[:50]}... "
+        )
         return data
 
 

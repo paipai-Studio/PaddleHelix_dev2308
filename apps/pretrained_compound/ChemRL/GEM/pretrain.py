@@ -25,6 +25,7 @@ import time
 import numpy as np
 from glob import glob
 import logging
+from tqdm import tqdm
 
 import paddle
 import paddle.distributed as dist
@@ -43,8 +44,8 @@ def train(args, model, optimizer, data_gen):
     steps = get_steps_per_epoch(args)
     step = 0
     list_loss = []
-    for graph_dict, feed_dict in data_gen:
-        print('rank:%s step:%s' % (dist.get_rank(), step))
+    for graph_dict, feed_dict in tqdm(data_gen):
+        # print('rank:%s step:%s' % (dist.get_rank(), step))
         # if dist.get_rank() == 1:
         #     time.sleep(100000)
         for k in graph_dict:
@@ -148,9 +149,12 @@ def main(args):
     print('Total size:%s' % (len(dataset)))
     print('Dataset smiles min/max/avg length: %s/%s/%s' % (
             np.min(smiles_lens), np.max(smiles_lens), np.mean(smiles_lens)))
-    transform_fn = GeoPredTransformFn(model_config['pretrain_tasks'], model_config['mask_ratio'])
+    transform_fn = GeoPredTransformFn(model_config['pretrain_tasks'], model_config['mask_ratio'], len(dataset))
+
     # this step will be time consuming due to rdkit 3d calculation
     dataset.transform(transform_fn, num_workers=args.num_workers)
+    # this step will be time consuming due to rdkit 3d calculation
+
     test_index = int(len(dataset) * (1 - args.test_ratio))
     train_dataset = dataset[:test_index]
     test_dataset = dataset[test_index:]
